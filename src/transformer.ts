@@ -35,6 +35,16 @@ function isRightMergeCell(cell?: Element): boolean {
 }
 
 /**
+ * Returns whether the element is empty merge cell or not.
+ *
+ * @param cell TD or TR element node
+ * @returns {@code true} if the element indicates "merge left", otherwise {@code false}
+ */
+function isEmptyMergeCell(cell?: Element): boolean {
+  return cell !== undefined && (cell.tagName === "td" || cell.tagName === "th") && cell.children.length === 0;
+}
+
+/**
  * Returns whether the element indicates "merge upper" or not.
  *
  * @param cell TD or TR element node
@@ -63,13 +73,22 @@ function transformTable(tableBody: Element): void {
 
   for (const row of matrix) {
     let colspan = 1;
+    let preCell = null;
     const transformedRow: Element[] = [];
     for (const cell of row) {
       if (isRightMergeCell(cell)) {
         colspan++;
         continue;
       }
-      transformedRow.push({
+      if (isEmptyMergeCell(cell) && preCell) {
+        // left merge
+        if (!preCell.properties?.colspan) {
+          preCell.properties = { ...preCell.properties, colspan: 1 };
+        }
+        (preCell.properties.colspan as number) += 1;
+        continue;
+      }
+      preCell = {
         ...cell,
         properties:
           colspan > 1
@@ -78,7 +97,8 @@ function transformTable(tableBody: Element): void {
                 colspan: colspan,
               }
             : cell.properties,
-      });
+      };
+      transformedRow.push(preCell);
       colspan = 1;
     }
     transformedMatrix.push(transformedRow);
@@ -88,7 +108,7 @@ function transformTable(tableBody: Element): void {
     let rowspan = 1;
     for (let rowIndex = tableHeight - 1; rowIndex >= 0; rowIndex--) {
       const cell = transformedMatrix[rowIndex][columnIndex];
-      if (isUpperMergeCell(cell)) {
+      if (isUpperMergeCell(cell) || (isEmptyMergeCell(cell) && rowIndex != 0)) {
         rowspan++;
         transformedMatrix[rowIndex].splice(columnIndex, 1);
         continue;
